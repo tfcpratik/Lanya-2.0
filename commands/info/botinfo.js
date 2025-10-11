@@ -94,14 +94,5 @@ module.exports = {
         iconURL: interaction.user.displayAvatarURL({ dynamic: true }),
       })
       .setTimestamp();
-
-    const sourceCodeButton = new ButtonBuilder()
-      .setLabel('Source Code')
-      .setURL('https://github.com/gaurav87565/Lanya-2.0')
-      .setStyle(ButtonStyle.Link);
-
-    const row = new ActionRowBuilder().addComponents(sourceCodeButton);
-
-    await interaction.reply({ embeds: [botInfoEmbed], components: [row] });
   },
 };
