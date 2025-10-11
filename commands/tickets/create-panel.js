@@ -6,173 +6,132 @@ const {
   ButtonStyle,
   ActionRowBuilder,
   StringSelectMenuBuilder,
-} = require('discord.js');
-const TicketSettings = require('../../models/TicketSettings');
-const TicketCategory = require('../../models/TicketCategory');
+} = require("discord.js");
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('createpanel')
-    .setDescription('Creates a ticket panel')
+    .setName("createpanel")
+    .setDescription("⚙️ Setup an advanced ticket panel for your server")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addChannelOption((option) =>
+    .addChannelOption(option =>
       option
-        .setName('channel')
-        .setDescription('Channel to send the ticket panel to')
+        .setName("channel")
+        .setDescription("📢 Select the channel where the panel should be sent")
         .setRequired(true)
     )
-    .addStringOption((option) =>
+    .addStringOption(option =>
       option
-        .setName('style')
-        .setDescription('Panel style')
+        .setName("style")
+        .setDescription("🎨 Choose the panel style")
         .setRequired(true)
         .addChoices(
-          { name: 'Buttons', value: 'buttons' },
-          { name: 'Select Menu', value: 'select' }
+          { name: "🟦 Buttons", value: "buttons" },
+          { name: "📜 Select Menu", value: "select" }
         )
     )
-    .addStringOption((option) =>
-      option.setName('title').setDescription('Panel title').setRequired(true)
-    )
-    .addStringOption((option) =>
+    .addStringOption(option =>
       option
-        .setName('messageid')
-        .setDescription(
-          'ID of message to use as description (must be in same channel as panel)'
-        )
+        .setName("title")
+        .setDescription("📝 The title of your ticket panel embed")
         .setRequired(true)
     )
-    .addStringOption((option) =>
+    .addStringOption(option =>
       option
-        .setName('categories')
-        .setDescription(
-          'Category names separated by comma (e.g: support,billing,help)'
-        )
+        .setName("description")
+        .setDescription("💬 The message that appears inside the panel embed")
         .setRequired(true)
     )
-    .addStringOption((option) =>
+    .addStringOption(option =>
       option
-        .setName('color')
-        .setDescription('Panel color (hex)')
+        .setName("color")
+        .setDescription("🎨 Optional: Custom embed color (hex code like #2b2d31)")
+        .setRequired(false)
+    )
+    .addStringOption(option =>
+      option
+        .setName("footer")
+        .setDescription("🦶 Optional: Footer text for the panel embed")
         .setRequired(false)
     ),
 
   async execute(interaction) {
-    const settings = await TicketSettings.findOne({
-      guildId: interaction.guildId,
-    });
-    if (!interaction.member.permissions.has('Administrator')) {
-      return interaction.reply({
-        content:
-          'You do not have `Administrator` permission to create a ticket panel!',
-        ephemeral: true,
-      });
+    const channel = interaction.options.getChannel("channel");
+    const style = interaction.options.getString("style");
+    const title = interaction.options.getString("title");
+    const desc = interaction.options.getString("description");
+    const color = interaction.options.getString("color") || "#2b2d31";
+    const footer = interaction.options.getString("footer") || "🎫 DEMON CLOUD Ticket System";
+
+    // Create fancy embed
+    const embed = new EmbedBuilder()
+      .setTitle(`🎟️ ${title}`)
+      .setDescription(
+        `> ${desc}\n\n✨ **Need Help?**\nClick the button or select a category below to create a private ticket with our support team.\n\n🕒 *Response time may vary based on staff availability.*`
+      )
+      .setColor(color)
+      .setFooter({ text: footer })
+      .setTimestamp();
+
+    let components = [];
+
+    // Buttons Style
+    if (style === "buttons") {
+      const openBtn = new ButtonBuilder()
+        .setCustomId("open_ticket")
+        .setLabel("🎫 Open Ticket")
+        .setStyle(ButtonStyle.Success);
+
+      const infoBtn = new ButtonBuilder()
+        .setLabel("🌐 Join Support Discord")
+        .setStyle(ButtonStyle.Link)
+        .setURL("https://discord.gg/your-support-link");
+
+      components = [new ActionRowBuilder().addComponents(openBtn, infoBtn)];
     }
-    if (!settings?.enabled) {
-      return interaction.reply({
-        content: '❌ Ticket system is not set up! Use `/ticketsetup` first.',
-        ephemeral: true,
-      });
-    }
 
-    const channel = interaction.options.getChannel('channel');
-    const style = interaction.options.getString('style');
-    const title = interaction.options.getString('title');
-    const messageId = interaction.options.getString('messageid');
-    const categoriesInput = interaction.options.getString('categories');
-    const color = interaction.options.getString('color') || '#DDA0DD';
-
-    try {
-      const descriptionMessage = await channel.messages.fetch(messageId);
-      if (!descriptionMessage) {
-        return interaction.reply({
-          content:
-            '❌ Could not find message with that ID in the specified channel.',
-          ephemeral: true,
-        });
-      }
-
-      const categoryNames = categoriesInput.split(',').map((c) => c.trim());
-      const categories = await TicketCategory.find({
-        guildId: interaction.guildId,
-        name: { $in: categoryNames },
-      });
-
-      if (categories.length === 0) {
-        return interaction.reply({
-          content:
-            '❌ None of the specified categories were found! Create them using `/ticketcategory add` first.',
-          ephemeral: true,
-        });
-      }
-
-      const embed = new EmbedBuilder()
-        .setTitle(title)
-        .setDescription(descriptionMessage.content)
-        .setColor(color)
-        .setTimestamp()
-        .setFooter({ text: 'Lanya Ticket System' });
-
-      let components = [];
-
-      if (style === 'buttons') {
-        const rows = [];
-        let currentRow = new ActionRowBuilder();
-        let buttonCount = 0;
-
-        for (const category of categories) {
-          if (buttonCount === 5) {
-            rows.push(currentRow);
-            currentRow = new ActionRowBuilder();
-            buttonCount = 0;
+    // Select Menu Style
+    else if (style === "select") {
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId("ticket_select")
+        .setPlaceholder("📂 Choose your ticket category")
+        .addOptions(
+          {
+            label: "🛠️ Technical Support",
+            description: "Get help with server or hosting issues",
+            value: "tech_support",
+          },
+          {
+            label: "💰 Billing / Payments",
+            description: "Questions about purchases or payments",
+            value: "billing",
+          },
+          {
+            label: "🎮 Server Setup Help",
+            description: "Need help setting up your game server?",
+            value: "setup_help",
+          },
+          {
+            label: "📦 Other Inquiries",
+            description: "Anything else that doesn’t fit above",
+            value: "other",
           }
+        );
 
-          const button = new ButtonBuilder()
-            .setCustomId(`ticket_${category.name}`)
-            .setLabel(category.name)
-            .setEmoji(category.emoji)
-            .setStyle(ButtonStyle.Primary);
+      const supportBtn = new ButtonBuilder()
+        .setLabel("🌐 Join DEMON CLOUD")
+        .setStyle(ButtonStyle.Link)
+        .setURL("https://discord.gg/your-support-link");
 
-          currentRow.addComponents(button);
-          buttonCount++;
-        }
-
-        if (buttonCount > 0) {
-          rows.push(currentRow);
-        }
-
-        components = rows;
-      } else {
-        const selectMenu = new StringSelectMenuBuilder()
-          .setCustomId('ticket_category')
-          .setPlaceholder('Select a category')
-          .addOptions(
-            categories.map((cat) => ({
-              label: cat.name,
-              description: cat.description,
-              value: cat.name,
-              emoji: cat.emoji,
-            }))
-          );
-
-        components = [new ActionRowBuilder().addComponents(selectMenu)];
-      }
-
-      await channel.send({
-        embeds: [embed],
-        components: components,
-      });
-
-      await interaction.reply({
-        content: `✅ Ticket panel created in ${channel}!`,
-        ephemeral: true,
-      });
-    } catch (error) {
-      console.error('Error creating panel:', error);
-      await interaction.reply({
-        content: '❌ An error occurred while creating the panel.',
-        ephemeral: true,
-      });
+      components = [
+        new ActionRowBuilder().addComponents(selectMenu),
+        new ActionRowBuilder().addComponents(supportBtn),
+      ];
     }
+
+    await channel.send({ embeds: [embed], components });
+    await interaction.reply({
+      content: `✅ **Ticket panel has been successfully created in** ${channel}!`,
+      ephemeral: true,
+    });
   },
 };
